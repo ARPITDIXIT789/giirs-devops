@@ -1,0 +1,67 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKERHUB_USER = 'arpitdixit78'
+        IMAGE_NAME = 'giirs-app'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        KUBECONFIG = '/home/ubuntu/.kube/config'
+    }
+
+    stages {
+
+        stage('Clone Repo') {
+            steps {
+                git credentialsId: 'github-creds',
+                    url: 'https://github.com/ARPITDIXIT789/giirs-devops.git',
+                    branch: 'main'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    docker build -t $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG ./app
+                    docker tag $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG $DOCKERHUB_USER/$IMAGE_NAME:latest
+                '''
+            }
+        }
+
+        stage('Push To DockerHub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG
+                        docker push $DOCKERHUB_USER/$IMAGE_NAME:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy To Kubernetes') {
+            steps {
+                sh '''
+                    kubectl apply -f k8s/deployment.yaml
+                    kubectl apply -f k8s/service.yaml
+                    kubectl set image deployment/giirs-app giirs-app=$DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG
+                    kubectl rollout status deployment/giirs-app
+                '''
+            }
+        }
+
+    }
+
+    post {
+        success {
+            echo 'Pipeline SUCCESS! GIIRS App Deployed!'
+        }
+        failure {
+            echo 'Pipeline FAILED! Check logs.'
+        }
+    }
+}
