@@ -224,7 +224,7 @@ def remediate_anomalies(anomalies, state):
 
         result["metric"] = metric
         result["anomaly"] = a
-        result["timestamp"] = datetime.utcnow().isoformat() + "Z"
+        result["timestamp"] = datetime.now(datetime.UTC).isoformat() + "Z"
         actions.append(result)
         mark_remediated(state, metric)
 
@@ -234,7 +234,7 @@ def remediate_anomalies(anomalies, state):
 
 def log_incident(anomalies, actions):
     record = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(datetime.UTC).isoformat() + "Z",
         "anomalies": anomalies,
         "actions": actions,
     }
