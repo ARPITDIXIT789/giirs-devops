@@ -1,0 +1,37 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: giirs-app-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: giirs-app.rules
+      rules:
+        - alert: GiirsPodCrashLooping
+          expr: increase(kube_pod_container_status_restarts_total{namespace="default",pod=~"giirs-app.*"}[5m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "GIIRS pod restart hua"
+            description: "Ek giirs-app pod crash/restart hua hai pichle 5 minute mein."
+
+        - alert: GiirsHighCPU
+          expr: sum(rate(container_cpu_usage_seconds_total{namespace="default",pod=~"giirs-app.*"}[2m])) by (pod) > 0.8
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "GIIRS pod high CPU use kar raha hai"
+            description: "Pod {{ $labels.pod }} 0.8 CPU core se zyada use kar raha hai."
+
+        - alert: GiirsPodOOMKilled
+          expr: kube_pod_container_status_last_terminated_reason{namespace="default",pod=~"giirs-app.*",reason="OOMKilled"} == 1
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "GIIRS pod OOMKilled hua"
+            description: "Pod {{ $labels.pod }} memory limit cross karke kill hua."
