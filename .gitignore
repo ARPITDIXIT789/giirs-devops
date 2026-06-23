@@ -1,3 +1,5 @@
 state.json
 incidents_log.json
 .env
+__pycache__/
+cron.log
