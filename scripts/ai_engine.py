@@ -224,7 +224,7 @@ def remediate_anomalies(anomalies, state):
 
         result["metric"] = metric
         result["anomaly"] = a
-        result["timestamp"] = datetime.now(timezone.utc).isoformat() + "Z"
+        result["timestamp"] = datetime.now(timezone.utc).isoformat()
         actions.append(result)
         mark_remediated(state, metric)
 
@@ -234,7 +234,7 @@ def remediate_anomalies(anomalies, state):
 
 def log_incident(anomalies, actions):
     record = {
-        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "anomalies": anomalies,
         "actions": actions,
     }
@@ -247,36 +247,6 @@ def log_incident(anomalies, actions):
         json.dump(log, f, indent=2)
     return record
 
-
-if __name__ == "__main__":
-    print("--- Current metrics ---")
-    print("Request rate (req/sec):", get_request_rate())
-    print("Error rate (fraction):", get_error_rate())
-    print("P95 latency (seconds):", get_p95_latency())
-    print("Pod restarts (total):", get_pod_restarts())
-
-    print("\n--- Anomaly check ---")
-    found = detect_anomalies()
-    if found:
-        for a in found:
-            print("ANOMALY:", a)
-
-        state = load_state()
-        actions = remediate_anomalies(found, state)
-
-        print("\n--- Remediation actions ---")
-        if actions:
-            for act in actions:
-                print("ACTION:", act)
-        else:
-            print("Koi action nahi liya (cooldown active tha).")
-
-        record = log_incident(found, actions)
-        if actions:
-            create_incident_pr(record)
-            create_grafana_annotation(record)
-    else:
-        print("Sab normal hai, koi anomaly detect nahi hui.")
 
 # ---------- GitHub PR creation (audit trail) ----------
 
@@ -397,7 +367,7 @@ def create_grafana_annotation(record):
     ) or "no action taken"
 
     text = f"GIIRS incident: {metrics} -> {actions_text}"
-    incident_time = datetime.fromisoformat(record["timestamp"])
+    incident_time = datetime.fromisoformat(record["timestamp"].rstrip("Z"))
 
     payload = {
         "time": int(incident_time.timestamp() * 1000),
@@ -411,3 +381,35 @@ def create_grafana_annotation(record):
     result = response.json()
     print("Grafana annotation created:", result.get("message", result))
     return result
+
+
+if __name__ == "__main__":
+    print("--- Current metrics ---")
+    print("Request rate (req/sec):", get_request_rate())
+    print("Error rate (fraction):", get_error_rate())
+    print("P95 latency (seconds):", get_p95_latency())
+    print("Pod restarts (total):", get_pod_restarts())
+
+    print("\n--- Anomaly check ---")
+    found = detect_anomalies()
+    if found:
+        for a in found:
+            print("ANOMALY:", a)
+
+        state = load_state()
+        actions = remediate_anomalies(found, state)
+
+        print("\n--- Remediation actions ---")
+        if actions:
+            for act in actions:
+                print("ACTION:", act)
+        else:
+            print("Koi action nahi liya (cooldown active tha).")
+
+        record = log_incident(found, actions)
+        if actions:
+            create_incident_pr(record)
+            create_grafana_annotation(record)
+    else:
+        print("Sab normal hai, koi anomaly detect nahi hui.")
+
