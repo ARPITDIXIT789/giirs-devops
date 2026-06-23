@@ -3,7 +3,7 @@ import os
 import statistics
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timezone, timezone
 
 import requests
 
@@ -224,7 +224,7 @@ def remediate_anomalies(anomalies, state):
 
         result["metric"] = metric
         result["anomaly"] = a
-        result["timestamp"] = datetime.now(datetime.UTC).isoformat() + "Z"
+        result["timestamp"] = datetime.now(timezone.utc).isoformat() + "Z"
         actions.append(result)
         mark_remediated(state, metric)
 
@@ -234,7 +234,7 @@ def remediate_anomalies(anomalies, state):
 
 def log_incident(anomalies, actions):
     record = {
-        "timestamp": datetime.now(datetime.UTC).isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
         "anomalies": anomalies,
         "actions": actions,
     }
@@ -274,6 +274,7 @@ if __name__ == "__main__":
         record = log_incident(found, actions)
         if actions:
             create_incident_pr(record)
+            create_grafana_annotation(record)
     else:
         print("Sab normal hai, koi anomaly detect nahi hui.")
 
@@ -371,3 +372,42 @@ def create_incident_pr(record):
     )
     print("PR created:", pr["html_url"])
     return pr["html_url"]
+
+# ---------- Grafana annotation (incident timeline) ----------
+
+GRAFANA_URL = "http://localhost:30286"
+
+
+def grafana_headers():
+    token = os.environ.get("GRAFANA_TOKEN")
+    if not token:
+        raise Exception("GRAFANA_TOKEN .env file mein set nahi hai")
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+
+def create_grafana_annotation(record):
+    """Incident ka time-marker Grafana dashboard par daalta hai (graph par vertical line)."""
+    metrics = ", ".join(a["metric"] for a in record["anomalies"])
+    actions_text = "; ".join(
+        f"{act['action']} ({'success' if act['success'] else 'failed'})"
+        for act in record["actions"]
+    ) or "no action taken"
+
+    text = f"GIIRS incident: {metrics} -> {actions_text}"
+    incident_time = datetime.fromisoformat(record["timestamp"])
+
+    payload = {
+        "time": int(incident_time.timestamp() * 1000),
+        "tags": ["giirs", "incident", "auto-remediation"],
+        "text": text,
+    }
+
+    url = f"{GRAFANA_URL}/api/annotations"
+    response = requests.post(url, headers=grafana_headers(), json=payload)
+    response.raise_for_status()
+    result = response.json()
+    print("Grafana annotation created:", result.get("message", result))
+    return result
